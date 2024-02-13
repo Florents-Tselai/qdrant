@@ -172,7 +172,10 @@ mod tests {
             segment_capacity: 1024 * 1024,
             segment_queue_len: 0,
         };
-        (SerdeWal::new(dir.path().to_str().unwrap(), options).unwrap(), dir)
+        (
+            SerdeWal::new(dir.path().to_str().unwrap(), options).unwrap(),
+            dir,
+        )
     }
 
     /// Test WAL delta resolution with just one missed operation on node C.
@@ -235,12 +238,20 @@ mod tests {
         a_clock_map.advance_clock(clock_tag);
         b_clock_map.advance_clock(clock_tag);
 
+        let a_wal = Arc::new(ParkingMutex::new(a_wal));
         let b_wal = Arc::new(ParkingMutex::new(b_wal));
+        let a_recovery_point = a_clock_map.to_recovery_point();
         let b_recovery_point = b_clock_map.to_recovery_point();
         let c_recovery_point = c_clock_map.to_recovery_point();
 
-        // Recover node C from node B, assert delta point is correct
-        let delta_from = resolve_wal_delta(c_recovery_point, b_wal.clone(), b_recovery_point).unwrap();
+        // Resolve delta on node A for node C, assert correctness
+        let delta_from =
+            resolve_wal_delta(c_recovery_point.clone(), a_wal.clone(), a_recovery_point).unwrap();
+        assert_eq!(delta_from, 1);
+
+        // Resolve delta on node B for node C, assert correctness
+        let delta_from =
+            resolve_wal_delta(c_recovery_point, b_wal.clone(), b_recovery_point).unwrap();
         assert_eq!(delta_from, 1);
 
         // Recover WAL on node C by writing delta from node B to it
@@ -250,6 +261,7 @@ mod tests {
 
         // WALs should match up perfectly now
         a_wal
+            .lock()
             .read(0)
             .zip(b_wal.lock().read(0))
             .zip(c_wal.read(0))
