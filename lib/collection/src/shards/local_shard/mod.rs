@@ -489,7 +489,7 @@ impl LocalShard {
     pub async fn load_from_wal(&self, collection_id: CollectionId) -> CollectionResult<()> {
         let mut last_clocks = self.wal.last_clocks.lock().await;
         let wal = self.wal.wal.lock();
-        let bar = ProgressBar::new(wal.len());
+        let bar = ProgressBar::new(wal.len(false));
 
         let progress_style = ProgressStyle::default_bar()
             .template("{msg} [{elapsed_precise}] {wide_bar} {pos}/{len} (eta:{eta})")
@@ -505,7 +505,7 @@ impl LocalShard {
         if !show_progress_bar {
             log::info!(
                 "Recovering collection {collection_id}: 0/{} (0%)",
-                wal.len(),
+                wal.len(false),
             );
         }
 
@@ -560,8 +560,8 @@ impl LocalShard {
                 let progress = bar.position();
                 log::info!(
                     "{progress}/{} ({}%)",
-                    wal.len(),
-                    (progress as f32 / wal.len() as f32 * 100.0) as usize,
+                    wal.len(false),
+                    (progress as f32 / wal.len(false) as f32 * 100.0) as usize,
                 );
                 last_progress_report = Instant::now();
             }
@@ -573,7 +573,7 @@ impl LocalShard {
         if !show_progress_bar {
             log::info!(
                 "Recovered collection {collection_id}: {0}/{0} (100%)",
-                wal.len(),
+                wal.len(false),
             );
         }
 
