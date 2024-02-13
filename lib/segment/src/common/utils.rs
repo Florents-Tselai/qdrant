@@ -357,6 +357,12 @@ pub fn check_exclude_pattern(pattern: &str, path: &str) -> bool {
         .all(|(p, v)| p == v)
 }
 
+/// Get the first part of a path.
+/// E.g., `"a.b.c"` -> `"a"`, `"a[0].b"` -> `"a"`.
+pub fn get_path_head(path: &str) -> &str {
+    path.split(['.', '[']).next().unwrap_or(path)
+}
+
 fn _filter_json_values<'a>(
     mut path: String,
     value: &'a Value,
@@ -791,5 +797,13 @@ mod tests {
         assert!(!check_exclude_pattern("a.b.c", "a.b.d"));
         assert!(!check_exclude_pattern("a.b.c", "a"));
         assert!(check_exclude_pattern("a", "a.d"));
+    }
+
+    #[test]
+    fn test_get_path_head() {
+        assert_eq!(get_path_head("a.b.c"), "a");
+        assert_eq!(get_path_head("a[0].b"), "a");
+        assert_eq!(get_path_head("a"), "a");
+        assert_eq!(get_path_head(""), "");
     }
 }
