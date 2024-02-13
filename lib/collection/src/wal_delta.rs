@@ -143,7 +143,7 @@ pub enum WalDeltaError {
     UnknownClocks,
     #[error("recovery point requests higher clocks this WAL has")]
     HigherThanCurrent,
-    #[error("some recovery point clocks are truncated in our WAL")]
+    #[error("recovery point requests clocks truncated from this WAL")]
     Truncated,
     #[error("cannot find slice of WAL operations that satisfies the recovery point")]
     NotFound,
@@ -336,6 +336,35 @@ mod tests {
             "recovery point requests higher clocks this WAL has",
         );
     }
+
+    // TODO: implement this once we have a truncation clock map
+    // /// Recovery point requests clocks that are already truncated
+    // #[test]
+    // fn test_recover_point_truncated() {
+    //     let wal_dir = Builder::new().prefix("wal_test").tempdir().unwrap();
+    //     let wal_options = WalOptions {
+    //         segment_capacity: 1024 * 1024,
+    //         segment_queue_len: 0,
+    //     };
+    //     let wal: SerdeWal<OperationWithClockTag> =
+    //         SerdeWal::new(wal_dir.path().to_str().unwrap(), wal_options).unwrap();
+    //     let wal = Arc::new(ParkingMutex::new(wal));
+
+    //     let mut recovery_point = RecoveryPoint::default();
+    //     let mut local_recovery_point = RecoveryPoint::default();
+
+    //     // Recovery point asks clock tick that has been truncated already
+    //     recovery_point.insert(1, 0, 15);
+    //     recovery_point.insert(1, 1, 10);
+    //     local_recovery_point.insert(1, 0, 20);
+    //     local_recovery_point.insert(1, 1, 12);
+
+    //     let resolve_result = resolve_wal_delta(recovery_point, wal, local_recovery_point);
+    //     assert_eq!(
+    //         resolve_result.unwrap_err().to_string(),
+    //         "recovery point requests clocks truncated from this WAL",
+    //     );
+    // }
 
     /// Recovery point operations are not in our WAL.
     #[test]
