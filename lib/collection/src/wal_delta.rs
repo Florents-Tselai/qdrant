@@ -67,7 +67,7 @@ impl RecoverableWal {
         resolve_wal_delta(
             recovery_point,
             self.wal.clone(),
-            self.recovery_point().await,
+            &self.recovery_point().await,
         )
     }
 }
@@ -87,23 +87,23 @@ impl RecoverableWal {
 fn resolve_wal_delta(
     mut recovery_point: RecoveryPoint,
     local_wal: LockedWal,
-    local_recovery_point: RecoveryPoint,
+    local_recovery_point: &RecoveryPoint,
 ) -> Result<u64, WalDeltaError> {
     // If the recovery point has clocks our current node does not know about
     // we're missing essential operations and cannot resolve a WAL delta
-    if recovery_point.has_clocks_not_in(&local_recovery_point) {
+    if recovery_point.has_clocks_not_in(local_recovery_point) {
         return Err(WalDeltaError::UnknownClocks);
     }
 
     // If our current node has any lower clock than the recovery point specifies,
     // we're missing essential operations and cannot resolve a WAL delta
-    if recovery_point.has_any_higher(&local_recovery_point) {
+    if recovery_point.has_any_higher(local_recovery_point) {
         return Err(WalDeltaError::HigherThanCurrent);
     }
 
     // Extend clock map with missing clocks this node know about
     // Ensure the recovering node gets records for a clock it might not have seen yet
-    recovery_point.extend_with_missing_clocks(&local_recovery_point);
+    recovery_point.extend_with_missing_clocks(local_recovery_point);
 
     // If recovery point is empty, we cannot do a diff transfer
     if recovery_point.is_empty() {
@@ -112,7 +112,7 @@ fn resolve_wal_delta(
 
     // Remove clocks that are equal to this node, we don't have to transfer records for them
     // TODO: do we want to remove higher clocks too, as the recovery node already has all data?
-    recovery_point.remove_equal_clocks(&local_recovery_point);
+    recovery_point.remove_equal_clocks(local_recovery_point);
 
     // TODO: check truncated clock values or each clock we have:
     // TODO: - if truncated is higher, we cannot resolve diff
@@ -246,12 +246,12 @@ mod tests {
 
         // Resolve delta on node A for node C, assert correctness
         let delta_from =
-            resolve_wal_delta(c_recovery_point.clone(), a_wal.clone(), a_recovery_point).unwrap();
+            resolve_wal_delta(c_recovery_point.clone(), a_wal.clone(), &a_recovery_point).unwrap();
         assert_eq!(delta_from, 1);
 
         // Resolve delta on node B for node C, assert correctness
         let delta_from =
-            resolve_wal_delta(c_recovery_point, b_wal.clone(), b_recovery_point).unwrap();
+            resolve_wal_delta(c_recovery_point, b_wal.clone(), &b_recovery_point).unwrap();
         assert_eq!(delta_from, 1);
 
         // Recover WAL on node C by writing delta from node B to it
@@ -287,7 +287,7 @@ mod tests {
         let recovery_point = RecoveryPoint::default();
         let local_recovery_point = RecoveryPoint::default();
 
-        let resolve_result = resolve_wal_delta(recovery_point, wal, local_recovery_point);
+        let resolve_result = resolve_wal_delta(recovery_point, wal, &local_recovery_point);
         assert_eq!(
             resolve_result.unwrap_err().to_string(),
             "recovery point has no clocks to resolve delta for",
@@ -316,7 +316,7 @@ mod tests {
         local_recovery_point.insert(1, 0, 20);
         local_recovery_point.insert(1, 1, 8);
 
-        let resolve_result = resolve_wal_delta(recovery_point, wal, local_recovery_point);
+        let resolve_result = resolve_wal_delta(recovery_point, wal, &local_recovery_point);
         assert_eq!(
             resolve_result.unwrap_err().to_string(),
             "recovery point requests clocks this WAL does not know about",
@@ -344,7 +344,7 @@ mod tests {
         local_recovery_point.insert(1, 0, 20);
         local_recovery_point.insert(1, 1, 8);
 
-        let resolve_result = resolve_wal_delta(recovery_point, wal, local_recovery_point);
+        let resolve_result = resolve_wal_delta(recovery_point, wal, &local_recovery_point);
         assert_eq!(
             resolve_result.unwrap_err().to_string(),
             "recovery point requests higher clocks this WAL has",
@@ -401,7 +401,7 @@ mod tests {
         local_recovery_point.insert(1, 0, 20);
         local_recovery_point.insert(1, 1, 12);
 
-        let resolve_result = resolve_wal_delta(recovery_point, wal, local_recovery_point);
+        let resolve_result = resolve_wal_delta(recovery_point, wal, &local_recovery_point);
         assert_eq!(
             resolve_result.unwrap_err().to_string(),
             "cannot find slice of WAL operations that satisfies the recovery point",
