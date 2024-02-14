@@ -289,6 +289,10 @@ mod tests {
                 assert_eq!(a, b);
                 assert_eq!(b, c);
             });
+
+        assert_wal_ordering_property(a_wal);
+        assert_wal_ordering_property(b_wal);
+        assert_wal_ordering_property(c_wal);
     }
 
     /// Test WAL delta resolution with a many missed operations on node C.
@@ -374,6 +378,10 @@ mod tests {
                 assert_eq!(a, b);
                 assert_eq!(b, c);
             });
+
+        assert_wal_ordering_property(a_wal);
+        assert_wal_ordering_property(b_wal);
+        assert_wal_ordering_property(c_wal);
     }
 
     /// Test WAL delta resolution with a many intermixed operations on node C. Intermixed as in,
@@ -468,6 +476,10 @@ mod tests {
                 assert_eq!(a, b);
                 assert_eq!(b, c);
             });
+
+        assert_wal_ordering_property(a_wal);
+        assert_wal_ordering_property(b_wal);
+        assert_wal_ordering_property(c_wal);
     }
 
     /// Test WAL delta resolution with operations in a different order on node A and B.
@@ -607,6 +619,10 @@ mod tests {
             assert!(b_wal_point_ids.contains(&i.into()));
             assert!(c_wal_point_ids.contains(&i.into()));
         });
+
+        assert_wal_ordering_property(a_wal);
+        assert_wal_ordering_property(b_wal);
+        assert_wal_ordering_property(c_wal);
     }
 
     #[tokio::test]
