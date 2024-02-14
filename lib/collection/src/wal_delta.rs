@@ -261,6 +261,7 @@ mod tests {
         // Recover WAL on node C by writing delta from node B to it
         b_wal.lock().read(delta_from).for_each(|(_, update)| {
             c_wal.write(&update).unwrap();
+            c_clock_map.advance_clock(update.clock_tag.unwrap());
         });
 
         // WALs should match up perfectly now
@@ -364,6 +365,7 @@ mod tests {
         // Recover WAL on node C by writing delta from node B to it
         b_wal.lock().read(delta_from).for_each(|(_, update)| {
             c_wal.write(&update).unwrap();
+            c_clock_map.advance_clock(update.clock_tag.unwrap());
         });
 
         // WALs should match up perfectly now
@@ -476,6 +478,7 @@ mod tests {
         // Recover WAL on node C by writing delta from node B to it
         b_wal.lock().read(delta_from).for_each(|(_, update)| {
             c_wal.write(&update).unwrap();
+            c_clock_map.advance_clock(update.clock_tag.unwrap());
         });
 
         // WALs should match up perfectly now
@@ -593,6 +596,7 @@ mod tests {
         // Recover WAL on node C by writing delta from node B to it
         b_wal.lock().read(delta_from).for_each(|(_, update)| {
             c_wal.write(&update).unwrap();
+            c_clock_map.advance_clock(update.clock_tag.unwrap());
         });
 
         // WAL on node B and C will match, A is in different order
