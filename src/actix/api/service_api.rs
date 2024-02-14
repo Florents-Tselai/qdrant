@@ -17,7 +17,7 @@ use crate::common::health;
 use crate::common::helpers::LocksOption;
 use crate::common::metrics::MetricsData;
 use crate::common::stacktrace::get_stack_trace;
-use crate::common::telemetry::TelemetryCollector;
+use crate::common::telemetry::{DetailsLevel, TelemetryCollector};
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct TelemetryParam {
@@ -32,7 +32,9 @@ async fn telemetry(
 ) -> impl Responder {
     let timing = Instant::now();
     let anonymize = params.anonymize.unwrap_or(false);
-    let details_level = params.details_level.unwrap_or(0);
+    let details_level = params
+        .details_level
+        .map_or(DetailsLevel::Level0, Into::into);
     let telemetry_collector = telemetry_collector.lock().await;
     let telemetry_data = telemetry_collector.prepare_data(details_level).await;
     let telemetry_data = if anonymize {
@@ -55,7 +57,7 @@ async fn metrics(
 ) -> impl Responder {
     let anonymize = params.anonymize.unwrap_or(false);
     let telemetry_collector = telemetry_collector.lock().await;
-    let telemetry_data = telemetry_collector.prepare_data(1).await;
+    let telemetry_data = telemetry_collector.prepare_data(DetailsLevel::Level1).await;
     let telemetry_data = if anonymize {
         telemetry_data.anonymize()
     } else {

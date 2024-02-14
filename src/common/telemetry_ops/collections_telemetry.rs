@@ -6,6 +6,8 @@ use segment::common::anonymize::Anonymize;
 use serde::{Deserialize, Serialize};
 use storage::content_manager::toc::TableOfContent;
 
+use crate::common::telemetry::DetailsLevel;
+
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct CollectionsAggregatedTelemetry {
     pub vectors: usize,
@@ -45,15 +47,15 @@ impl From<CollectionTelemetry> for CollectionsAggregatedTelemetry {
 }
 
 impl CollectionsTelemetry {
-    pub async fn collect(level: usize, toc: &TableOfContent) -> Self {
+    pub async fn collect(level: DetailsLevel, toc: &TableOfContent) -> Self {
         let number_of_collections = toc.all_collections().await.len();
-        let collections = if level > 0 {
+        let collections = if level > DetailsLevel::Level0 {
             let telemetry_data = toc
                 .get_telemetry_data()
                 .await
                 .into_iter()
                 .map(|telemetry| {
-                    if level > 1 {
+                    if level > DetailsLevel::Level1 {
                         CollectionTelemetryEnum::Full(telemetry)
                     } else {
                         CollectionTelemetryEnum::Aggregated(telemetry.into())

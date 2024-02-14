@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use storage::dispatcher::Dispatcher;
 use storage::types::{ClusterStatus, ConsensusThreadStatus, StateRole};
 
+use crate::common::telemetry::DetailsLevel;
 use crate::settings::Settings;
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
@@ -64,35 +65,29 @@ pub struct ClusterTelemetry {
 }
 
 impl ClusterTelemetry {
-    pub fn collect(level: usize, dispatcher: &Dispatcher, settings: &Settings) -> ClusterTelemetry {
-        let status = if level > 0 {
-            match dispatcher.cluster_status() {
-                ClusterStatus::Disabled => None,
-                ClusterStatus::Enabled(cluster_info) => Some(ClusterStatusTelemetry {
-                    number_of_peers: cluster_info.peers.len(),
-                    term: cluster_info.raft_info.term,
-                    commit: cluster_info.raft_info.commit,
-                    pending_operations: cluster_info.raft_info.pending_operations,
-                    role: cluster_info.raft_info.role,
-                    is_voter: cluster_info.raft_info.is_voter,
-                    peer_id: Some(cluster_info.peer_id),
-                    consensus_thread_status: cluster_info.consensus_thread_status,
-                }),
-            }
-        } else {
-            None
-        };
-
-        let config = if level > 1 {
-            Some(ClusterConfigTelemetry::from(settings))
-        } else {
-            None
-        };
-
+    pub fn collect(
+        level: DetailsLevel,
+        dispatcher: &Dispatcher,
+        settings: &Settings,
+    ) -> ClusterTelemetry {
         ClusterTelemetry {
             enabled: settings.cluster.enabled,
-            status,
-            config,
+            status: (level > DetailsLevel::Level0)
+                .then(|| match dispatcher.cluster_status() {
+                    ClusterStatus::Disabled => None,
+                    ClusterStatus::Enabled(cluster_info) => Some(ClusterStatusTelemetry {
+                        number_of_peers: cluster_info.peers.len(),
+                        term: cluster_info.raft_info.term,
+                        commit: cluster_info.raft_info.commit,
+                        pending_operations: cluster_info.raft_info.pending_operations,
+                        role: cluster_info.raft_info.role,
+                        is_voter: cluster_info.raft_info.is_voter,
+                        peer_id: Some(cluster_info.peer_id),
+                        consensus_thread_status: cluster_info.consensus_thread_status,
+                    }),
+                })
+                .flatten(),
+            config: (level > DetailsLevel::Level1).then(|| ClusterConfigTelemetry::from(settings)),
         }
     }
 }

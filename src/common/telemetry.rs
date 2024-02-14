@@ -34,6 +34,27 @@ pub struct TelemetryData {
     pub(crate) requests: RequestsTelemetry,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DetailsLevel {
+    Level0,
+    Level1,
+    Level2,
+}
+
+impl DetailsLevel {
+    pub const MAX: DetailsLevel = DetailsLevel::Level2;
+}
+
+impl From<usize> for DetailsLevel {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => DetailsLevel::Level0,
+            1 => DetailsLevel::Level1,
+            _ => DetailsLevel::Level2,
+        }
+    }
+}
+
 impl Anonymize for TelemetryData {
     fn anonymize(&self) -> Self {
         TelemetryData {
@@ -70,7 +91,7 @@ impl TelemetryCollector {
         }
     }
 
-    pub async fn prepare_data(&self, level: usize) -> TelemetryData {
+    pub async fn prepare_data(&self, level: DetailsLevel) -> TelemetryData {
         TelemetryData {
             id: self.process_id.to_string(),
             collections: CollectionsTelemetry::collect(level, self.dispatcher.toc()).await,

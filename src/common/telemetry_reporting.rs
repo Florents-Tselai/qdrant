@@ -4,9 +4,9 @@ use std::time::Duration;
 use segment::common::anonymize::Anonymize;
 use tokio::sync::Mutex;
 
-use crate::common::telemetry::TelemetryCollector;
+use crate::common::telemetry::{DetailsLevel, TelemetryCollector};
 
-const DETAIL_LEVEL: usize = 5;
+const DETAIL_LEVEL: DetailsLevel = DetailsLevel::MAX;
 const REPORTING_INTERVAL: Duration = Duration::from_secs(60 * 60); // One hour
 
 pub struct TelemetryReporter {
