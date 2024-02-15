@@ -63,7 +63,7 @@ impl RecoverableWal {
     pub async fn resolve_wal_delta(
         &self,
         recovery_point: RecoveryPoint,
-    ) -> Result<u64, WalDeltaError> {
+    ) -> Result<Option<u64>, WalDeltaError> {
         resolve_wal_delta(
             recovery_point,
             self.wal.clone(),
@@ -97,21 +97,28 @@ impl RecoverableWal {
 /// The delta can be sent over to the node which the recovery point is from, to restore its
 /// WAL making it consistent with the current shard.
 ///
-/// On success, a WAL record number from which the delta is resolved in the given WAL is returned.
-/// If a WAL delta could not be resolved, an error is returned describing the failure.
+/// On success, an option holding a WAL record number is returned.
+/// If `Some` - the remote WAL can be recovered by sending the local WAL from that record number.
+/// If `None` - the remote WAL is already equal, and we don't have to send any records.
+/// If `Err` - no delta can be resolved.
 fn resolve_wal_delta(
     mut recovery_point: RecoveryPoint,
     local_wal: LockedWal,
     local_recovery_point: &RecoveryPoint,
-) -> Result<u64, WalDeltaError> {
+) -> Result<Option<u64>, WalDeltaError> {
+    // If recovery point is empty, we cannot do a diff transfer
+    if recovery_point.is_empty() {
+        return Err(WalDeltaError::Empty);
+    }
+
     // If the recovery point has clocks our current node does not know about
-    // we're missing essential operations and cannot resolve a WAL delta
+    // we're missing essential records and cannot resolve a WAL delta
     if recovery_point.has_clocks_not_in(local_recovery_point) {
         return Err(WalDeltaError::UnknownClocks);
     }
 
     // If our current node has any lower clock than the recovery point specifies,
-    // we're missing essential operations and cannot resolve a WAL delta
+    // we're missing essential records and cannot resolve a WAL delta
     if recovery_point.has_any_higher(local_recovery_point) {
         return Err(WalDeltaError::HigherThanCurrent);
     }
@@ -120,14 +127,14 @@ fn resolve_wal_delta(
     // Ensure the recovering node gets records for a clock it might not have seen yet
     recovery_point.extend_with_missing_clocks(local_recovery_point);
 
-    // If recovery point is empty, we cannot do a diff transfer
-    if recovery_point.is_empty() {
-        return Err(WalDeltaError::Empty);
-    }
-
     // Remove clocks that are equal to this node, we don't have to transfer records for them
     // TODO: do we want to remove higher clocks too, as the recovery node already has all data?
     recovery_point.remove_equal_clocks(local_recovery_point);
+
+    // If there are no points left, WALs match op so we do not recovery anything
+    if recovery_point.is_empty() {
+        return Ok(None);
+    }
 
     // TODO: check truncated clock values or each clock we have:
     // TODO: - if truncated is higher, we cannot resolve diff
@@ -146,7 +153,7 @@ fn resolve_wal_delta(
         })
         .map(|(op_num, _)| op_num);
 
-    delta_from.ok_or(WalDeltaError::NotFound)
+    delta_from.map(Some).ok_or(WalDeltaError::NotFound)
 }
 
 #[derive(Error, Debug, Clone)]
@@ -160,7 +167,7 @@ pub enum WalDeltaError {
     HigherThanCurrent,
     #[error("recovery point requests clocks truncated from this WAL")]
     Truncated,
-    #[error("cannot find slice of WAL operations that satisfies the recovery point")]
+    #[error("cannot find slice of WAL records that satisfies the recovery point")]
     NotFound,
 }
 
@@ -270,6 +277,7 @@ mod tests {
         let delta_from = a_wal
             .resolve_wal_delta(c_recovery_point.clone())
             .await
+            .unwrap()
             .unwrap();
         assert_eq!(delta_from, 1);
 
@@ -277,6 +285,7 @@ mod tests {
         let delta_from = b_wal
             .resolve_wal_delta(c_recovery_point.clone())
             .await
+            .unwrap()
             .unwrap();
         assert_eq!(delta_from, 1);
 
@@ -376,11 +385,16 @@ mod tests {
         let delta_from = a_wal
             .resolve_wal_delta(c_recovery_point.clone())
             .await
+            .unwrap()
             .unwrap();
         assert_eq!(delta_from, N as u64);
 
         // Resolve delta on node B for node C, assert correctness
-        let delta_from = b_wal.resolve_wal_delta(c_recovery_point).await.unwrap();
+        let delta_from = b_wal
+            .resolve_wal_delta(c_recovery_point)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(delta_from, N as u64);
 
         // Diff should have M operations, as node C missed M operations
@@ -488,11 +502,16 @@ mod tests {
         let delta_from = a_wal
             .resolve_wal_delta(c_recovery_point.clone())
             .await
+            .unwrap()
             .unwrap();
         assert_eq!(delta_from, N as u64);
 
         // Resolve delta on node B for node C, assert correctness
-        let delta_from = b_wal.resolve_wal_delta(c_recovery_point).await.unwrap();
+        let delta_from = b_wal
+            .resolve_wal_delta(c_recovery_point)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(delta_from, N as u64);
 
         // Diff should have M operations, as node C missed M operations
@@ -606,6 +625,7 @@ mod tests {
         let delta_from = a_wal
             .resolve_wal_delta(c_recovery_point.clone())
             .await
+            .unwrap()
             .unwrap();
         assert_eq!(delta_from, 1);
 
@@ -613,6 +633,7 @@ mod tests {
         let delta_from = b_wal
             .resolve_wal_delta(c_recovery_point.clone())
             .await
+            .unwrap()
             .unwrap();
         assert_eq!(delta_from, 1);
 
@@ -803,14 +824,21 @@ mod tests {
             }
             assert_eq!(from_deltas.len(), 1, "found different delta starting points in different WALs, while all should be the same");
             let delta_from = from_deltas.into_iter().next().unwrap();
+            assert_eq!(
+                delta_from.is_some(),
+                operation_count > 0,
+                "if we had operations to some node, we must find a delta, otherwise not",
+            );
 
             // Recover WAL on the dead node from a random alive node
-            let alive_node = *alive_nodes.choose(&mut rng).unwrap();
-            wals[dead_node]
-                .0
-                .append_from(&wals[alive_node].0, delta_from)
-                .await
-                .unwrap();
+            if let Some(delta_from) = delta_from {
+                let alive_node = *alive_nodes.choose(&mut rng).unwrap();
+                wals[dead_node]
+                    .0
+                    .append_from(&wals[alive_node].0, delta_from)
+                    .await
+                    .unwrap();
+            }
 
             // All WALs must be equal, having exactly the same entries
             wals.iter()
