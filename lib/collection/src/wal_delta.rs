@@ -746,6 +746,9 @@ mod tests {
             .take(node_count)
             .collect::<Vec<_>>();
 
+        // A list of clocks we don't release for some iterations
+        let mut kept_clocks = vec![];
+
         // 25 times:
         // - insert random number of operations on all nodes
         // - randomly kill a node (or rather, mark as killed)
@@ -779,6 +782,12 @@ mod tests {
                     let mut operation = operation.clone();
                     wal.lock_and_write(&mut operation).await.unwrap();
                     clock.advance_to(operation.clock_tag.unwrap().clock_tick);
+                }
+
+                // Maybe keep the clock for some iterations
+                let keep_clock_for = rng.gen_range(0..3);
+                if keep_clock_for > 0 {
+                    kept_clocks.push((keep_clock_for, clock));
                 }
             }
 
@@ -820,6 +829,12 @@ mod tests {
                         .await
                         .unwrap();
                     clock.advance_to(operation.clock_tag.unwrap().clock_tick);
+                }
+
+                // Maybe keep the clock for some iterations
+                let keep_clock_for = rng.gen_range(0..10);
+                if keep_clock_for > 0 {
+                    kept_clocks.push((keep_clock_for, clock));
                 }
             }
 
@@ -866,6 +881,12 @@ mod tests {
                         "all WALs must have the same entries",
                     );
                 });
+
+            // Release some kept clocks
+            kept_clocks.retain(|(mut keep_for, _)| {
+                keep_for -= 1;
+                keep_for > 0
+            });
         }
 
         wals.into_iter().for_each(|(wal, _)| {
