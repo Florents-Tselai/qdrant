@@ -1027,7 +1027,7 @@ mod tests {
         let resolve_result = resolve_wal_delta(recovery_point, wal, &local_recovery_point);
         assert_eq!(
             resolve_result.unwrap_err().to_string(),
-            "cannot find slice of WAL operations that satisfies the recovery point",
+            "cannot find slice of WAL records that satisfies the recovery point",
         );
     }
 
