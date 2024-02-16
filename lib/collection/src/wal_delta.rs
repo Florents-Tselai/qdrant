@@ -974,6 +974,10 @@ mod tests {
             delta_from.unwrap_err().to_string(),
             "recovery point requests clocks this WAL does not know about",
         );
+
+        assert_wal_ordering_property(&a_wal);
+        assert_wal_ordering_property(&b_wal);
+        assert_wal_ordering_property(&e_wal);
     }
 
     /// Empty recovery point should not resolve any diff.
@@ -1119,11 +1123,7 @@ mod tests {
             .wal
             .lock()
             .read(0)
-            .map(|(_, operation)| {
-                operation
-                    .clock_tag
-                    .expect("WAL operation does not have a clock tag")
-            })
+            .filter_map(|(_, operation)| operation.clock_tag)
             .collect::<Vec<_>>();
         check_clock_tag_ordering_property(&clock_tags).unwrap();
     }
